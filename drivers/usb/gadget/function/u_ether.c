@@ -1873,6 +1873,10 @@ struct net_device *gether_setup_name_default(const char *netname)
 	SET_NETDEV_DEVTYPE(net, &gadget_type);
 	uether_debugfs_init(dev, netname);
 
+	/* MTU range: 14 - 15412 */
+	net->min_mtu = ETH_HLEN;
+	net->max_mtu = GETHER_MAX_ETH_FRAME_LEN;
+
 	return net;
 }
 EXPORT_SYMBOL_GPL(gether_setup_name_default);
