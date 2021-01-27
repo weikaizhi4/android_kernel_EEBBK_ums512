@@ -158,7 +158,6 @@ enum parse_parameter {
 	Opt_no_backing_file_readahead,
 	Opt_rlog_pages,
 	Opt_rlog_wakeup_cnt,
-	Opt_report_uid,
 	Opt_err
 };
 
@@ -169,7 +168,6 @@ static const match_table_t option_tokens = {
 	{ Opt_no_backing_file_readahead, "no_bf_readahead=%u" },
 	{ Opt_rlog_pages, "rlog_pages=%u" },
 	{ Opt_rlog_wakeup_cnt, "rlog_wakeup_cnt=%u" },
-	{ Opt_report_uid, "report_uid" },
 	{ Opt_err, NULL }
 };
 
@@ -229,9 +227,6 @@ static int parse_options(struct mount_options *opts, char *str)
 			if (match_int(&args[0], &value))
 				return -EINVAL;
 			opts->read_log_wakeup_count = value;
-			break;
-		case Opt_report_uid:
-			opts->report_uid = true;
 			break;
 		default:
 			return -EINVAL;
@@ -320,6 +315,220 @@ static struct inode *fetch_regular_inode(struct super_block *sb,
 		.ino = backing_inode->i_ino,
 		.backing_dentry = backing_dentry,
 		.size = read_size_attr(backing_dentry),
+	};
+	struct inode *inode = iget5_locked(sb, search.ino, inode_test,
+				inode_set, &search);
+
+	if (!inode)
+		return ERR_PTR(-ENOMEM);
+
+	if (inode->i_state & I_NEW)
+		unlock_new_inode(inode);
+
+	return inode;
+}
+
+static ssize_t pending_reads_read(struct file *f, char __user *buf, size_t len,
+			    loff_t *ppos)
+{
+	struct pending_reads_state *pr_state = f->private_data;
+	struct mount_info *mi = get_mount_info(file_superblock(f));
+	struct incfs_pending_read_info *reads_buf = NULL;
+	size_t reads_to_collect = len / sizeof(*reads_buf);
+	int last_known_read_sn = READ_ONCE(pr_state->last_pending_read_sn);
+	int new_max_sn = last_known_read_sn;
+	int reads_collected = 0;
+	ssize_t result = 0;
+
+	if (!mi)
+		return -EFAULT;
+
+	if (!incfs_fresh_pending_reads_exist(mi, last_known_read_sn))
+		return 0;
+
+	reads_buf = (struct incfs_pending_read_info *)get_zeroed_page(GFP_NOFS);
+	if (!reads_buf)
+		return -ENOMEM;
+
+	reads_to_collect =
+		min_t(size_t, PAGE_SIZE / sizeof(*reads_buf), reads_to_collect);
+
+	reads_collected = incfs_collect_pending_reads(
+		mi, last_known_read_sn, reads_buf, reads_to_collect, &new_max_sn);
+	if (reads_collected < 0) {
+		result = reads_collected;
+		goto out;
+	}
+
+	/*
+	 * Just to make sure that we don't accidentally copy more data
+	 * to reads buffer than userspace can handle.
+	 */
+	reads_collected = min_t(size_t, reads_collected, reads_to_collect);
+	result = reads_collected * sizeof(*reads_buf);
+
+	/* Copy reads info to the userspace buffer */
+	if (copy_to_user(buf, reads_buf, result)) {
+		result = -EFAULT;
+		goto out;
+	}
+
+	WRITE_ONCE(pr_state->last_pending_read_sn, new_max_sn);
+	*ppos = 0;
+out:
+	if (reads_buf)
+		free_page((unsigned long)reads_buf);
+	return result;
+}
+
+
+static __poll_t pending_reads_poll(struct file *file, poll_table *wait)
+{
+	struct pending_reads_state *state = file->private_data;
+	struct mount_info *mi = get_mount_info(file_superblock(file));
+	__poll_t ret = 0;
+
+	poll_wait(file, &mi->mi_pending_reads_notif_wq, wait);
+	if (incfs_fresh_pending_reads_exist(mi,
+					    state->last_pending_read_sn))
+		ret = EPOLLIN | EPOLLRDNORM;
+
+	return ret;
+}
+
+static int pending_reads_open(struct inode *inode, struct file *file)
+{
+	struct pending_reads_state *state = NULL;
+
+	state = kzalloc(sizeof(*state), GFP_NOFS);
+	if (!state)
+		return -ENOMEM;
+
+	file->private_data = state;
+	return 0;
+}
+
+static int pending_reads_release(struct inode *inode, struct file *file)
+{
+	kfree(file->private_data);
+	return 0;
+}
+
+static struct inode *fetch_pending_reads_inode(struct super_block *sb)
+{
+	struct inode_search search = {
+		.ino = INCFS_PENDING_READS_INODE
+	};
+	struct inode *inode = iget5_locked(sb, search.ino, inode_test,
+				inode_set, &search);
+
+	if (!inode)
+		return ERR_PTR(-ENOMEM);
+
+	if (inode->i_state & I_NEW)
+		unlock_new_inode(inode);
+
+	return inode;
+}
+
+static int log_open(struct inode *inode, struct file *file)
+{
+	struct log_file_state *log_state = NULL;
+	struct mount_info *mi = get_mount_info(file_superblock(file));
+
+	log_state = kzalloc(sizeof(*log_state), GFP_NOFS);
+	if (!log_state)
+		return -ENOMEM;
+
+	log_state->state = incfs_get_log_state(mi);
+	file->private_data = log_state;
+	return 0;
+}
+
+static int log_release(struct inode *inode, struct file *file)
+{
+	kfree(file->private_data);
+	return 0;
+}
+
+static ssize_t log_read(struct file *f, char __user *buf, size_t len,
+			loff_t *ppos)
+{
+	struct log_file_state *log_state = f->private_data;
+	struct mount_info *mi = get_mount_info(file_superblock(f));
+	int total_reads_collected = 0;
+	int rl_size;
+	ssize_t result = 0;
+	struct incfs_pending_read_info *reads_buf;
+	ssize_t reads_to_collect = len / sizeof(*reads_buf);
+	ssize_t reads_per_page = PAGE_SIZE / sizeof(*reads_buf);
+
+	rl_size = READ_ONCE(mi->mi_log.rl_size);
+	if (rl_size == 0)
+		return 0;
+
+	reads_buf = (struct incfs_pending_read_info *)__get_free_page(GFP_NOFS);
+	if (!reads_buf)
+		return -ENOMEM;
+
+	reads_to_collect = min_t(ssize_t, rl_size, reads_to_collect);
+	while (reads_to_collect > 0) {
+		struct read_log_state next_state;
+		int reads_collected;
+
+		memcpy(&next_state, &log_state->state, sizeof(next_state));
+		reads_collected = incfs_collect_logged_reads(
+			mi, &next_state, reads_buf,
+			min_t(ssize_t, reads_to_collect, reads_per_page));
+		if (reads_collected <= 0) {
+			result = total_reads_collected ?
+					 total_reads_collected *
+						 sizeof(*reads_buf) :
+					 reads_collected;
+			goto out;
+		}
+		if (copy_to_user(buf, reads_buf,
+				 reads_collected * sizeof(*reads_buf))) {
+			result = total_reads_collected ?
+					 total_reads_collected *
+						 sizeof(*reads_buf) :
+					 -EFAULT;
+			goto out;
+		}
+
+		memcpy(&log_state->state, &next_state, sizeof(next_state));
+		total_reads_collected += reads_collected;
+		buf += reads_collected * sizeof(*reads_buf);
+		reads_to_collect -= reads_collected;
+	}
+
+	result = total_reads_collected * sizeof(*reads_buf);
+	*ppos = 0;
+out:
+	if (reads_buf)
+		free_page((unsigned long)reads_buf);
+	return result;
+}
+
+static __poll_t log_poll(struct file *file, poll_table *wait)
+{
+	struct log_file_state *log_state = file->private_data;
+	struct mount_info *mi = get_mount_info(file_superblock(file));
+	int count;
+	__poll_t ret = 0;
+
+	poll_wait(file, &mi->mi_log.ml_notif_wq, wait);
+	count = incfs_get_uncollected_logs_count(mi, &log_state->state);
+	if (count >= mi->mi_options.read_log_wakeup_count)
+		ret = EPOLLIN | EPOLLRDNORM;
+
+	return ret;
+}
+
+static struct inode *fetch_log_inode(struct super_block *sb)
+{
+	struct inode_search search = {
+		.ino = INCFS_LOG_INODE
 	};
 	struct inode *inode = iget5_locked(sb, search.ino, inode_test,
 				inode_set, &search);
@@ -1588,11 +1797,6 @@ static int incfs_remount_fs(struct super_block *sb, int *flags, char *data)
 	if (err)
 		return err;
 
-	if (options.report_uid != mi->mi_options.report_uid) {
-		pr_err("incfs: Can't change report_uid mount option on remount\n");
-		return -EOPNOTSUPP;
-	}
-
 	err = incfs_realloc_mount_info(mi, &options);
 	if (err)
 		return err;
@@ -1625,7 +1829,5 @@ static int show_options(struct seq_file *m, struct dentry *root)
 		seq_puts(m, ",no_bf_cache");
 	if (mi->mi_options.no_backing_file_readahead)
 		seq_puts(m, ",no_bf_readahead");
-	if (mi->mi_options.report_uid)
-		seq_puts(m, ",report_uid");
 	return 0;
 }
