@@ -646,8 +646,7 @@ static int read_single_page(struct file *f, struct page *page)
 
 	page_start = kmap(page);
 	offset = page_offset(page);
-	block_index = (offset + df->df_mapped_offset) /
-		INCFS_DATA_FILE_BLOCK_SIZE;
+	block_index = offset / INCFS_DATA_FILE_BLOCK_SIZE;
 	size = df->df_size;
 	timeout_ms = df->df_mount_info->mi_options.read_timeout_ms;
 

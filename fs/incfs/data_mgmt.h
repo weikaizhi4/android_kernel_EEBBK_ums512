@@ -289,8 +289,6 @@ int incfs_realloc_mount_info(struct mount_info *mi,
 
 void incfs_free_mount_info(struct mount_info *mi);
 
-char *file_id_to_str(incfs_uuid_t id);
-struct dentry *incfs_lookup_dentry(struct dentry *parent, const char *name);
 struct data_file *incfs_open_data_file(struct mount_info *mi, struct file *bf);
 void incfs_free_data_file(struct data_file *df);
 
