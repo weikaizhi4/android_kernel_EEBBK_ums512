@@ -118,8 +118,7 @@ enum incfs_metadata_type {
 	INCFS_MD_NONE = 0,
 	INCFS_MD_BLOCK_MAP = 1,
 	INCFS_MD_FILE_ATTR = 2,
-	INCFS_MD_SIGNATURE = 3,
-	INCFS_MD_STATUS = 4,
+	INCFS_MD_SIGNATURE = 3
 };
 
 enum incfs_file_header_flags {
@@ -280,14 +279,11 @@ struct metadata_handler {
 		struct incfs_md_header md_header;
 		struct incfs_blockmap blockmap;
 		struct incfs_file_signature signature;
-		struct incfs_status status;
 	} md_buffer;
 
 	int (*handle_blockmap)(struct incfs_blockmap *bm,
 			       struct metadata_handler *handler);
 	int (*handle_signature)(struct incfs_file_signature *sig,
-				 struct metadata_handler *handler);
-	int (*handle_status)(struct incfs_status *sig,
 				 struct metadata_handler *handler);
 };
 #define INCFS_MAX_METADATA_RECORD_SIZE \

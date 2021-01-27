@@ -689,11 +689,6 @@ int incfs_read_next_metadata_record(struct backing_file_context *bfc,
 			res = handler->handle_signature(
 				&handler->md_buffer.signature, handler);
 		break;
-	case INCFS_MD_STATUS:
-		if (handler->handle_status)
-			res = handler->handle_status(
-				&handler->md_buffer.status, handler);
-		break;
 	default:
 		res = -ENOTSUPP;
 		break;

@@ -86,6 +86,8 @@ static const struct file_operations incfs_dir_fops = {
 	.iterate = iterate_incfs_dir,
 	.open = file_open,
 	.release = file_release,
+	.unlocked_ioctl = dispatch_ioctl,
+	.compat_ioctl = dispatch_ioctl
 };
 
 static const struct dentry_operations incfs_dentry_ops = {
@@ -727,8 +729,6 @@ static long dispatch_ioctl(struct file *f, unsigned int req, unsigned long arg)
 		return ioctl_read_file_signature(f, (void __user *)arg);
 	case INCFS_IOC_GET_FILLED_BLOCKS:
 		return ioctl_get_filled_blocks(f, (void __user *)arg);
-	case INCFS_IOC_GET_BLOCK_COUNT:
-		return ioctl_get_block_count(f, (void __user *)arg);
 	default:
 		return -EINVAL;
 	}

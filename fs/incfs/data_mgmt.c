@@ -1145,10 +1145,8 @@ int incfs_process_new_data_block(struct data_file *df,
 			df->df_blockmap_off, flags);
 		mutex_unlock(&bfc->bc_mutex);
 	}
-	if (!error) {
+	if (!error)
 		notify_pending_reads(mi, segment, block->block_index);
-		atomic_inc(&df->df_data_blocks_written);
-	}
 
 	up_write(&segment->rwsem);
 
@@ -1375,7 +1373,6 @@ int incfs_scan_metadata_chain(struct data_file *df)
 	handler->context = df;
 	handler->handle_blockmap = process_blockmap_md;
 	handler->handle_signature = process_file_signature_md;
-	handler->handle_status = process_status_md;
 
 	while (handler->md_record_offset > 0) {
 		error = incfs_read_next_metadata_record(bfc, handler);
