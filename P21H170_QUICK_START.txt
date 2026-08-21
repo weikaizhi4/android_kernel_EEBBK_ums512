@@ -1,0 +1,149 @@
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║                     P21H170 编译快速参考卡                               ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+【快速开始】
+
+1️⃣  编译内核（最简单）
+   $ cd /run/media/lwztime/GAME/A7/android_kernel_EEBBK_P21H180
+   $ ./scripts/build-p21h170.sh kernel
+   
+   ⏱️  预计时间: 20-30 分钟
+   📦 输出: out/release/kernel/arch/arm64/boot/Image
+
+2️⃣  完整编译（包含模块和 recovery）
+   $ ./scripts/build-p21h170.sh all
+   
+   ⏱️  预计时间: 30-45 分钟
+   📦 输出:
+      - 内核: out/release/kernel/arch/arm64/boot/Image
+      - 模块: out/release/kernel/modules/*.ko
+      - Recovery: out/release/recovery-p21h170.zip
+
+3️⃣  仅生成 recovery 包
+   $ ./scripts/build-p21h170.sh recovery
+
+【环境变量（可选）】
+
+指定编译并发数:
+  $ JOBS=2 ./scripts/build-p21h170.sh kernel
+
+指定输出目录:
+  $ P21H170_OUTPUT_DIR=/custom/path ./scripts/build-p21h170.sh all
+
+指定源码目录:
+  $ P21H170_SOURCE_DIR=/path/to/kernel ./scripts/build-p21h170.sh all
+
+【关键文件位置】
+
+设备树配置:
+  arch/arm64/boot/dts/sprd/ums512-1h170-overlay.dts
+
+编译配置:
+  arch/arm64/configs/ums512-p21h170_defconfig
+
+LCD 驱动:
+  arch/arm64/boot/dts/sprd/lcd/lcd_ft8201ab_boe_mipi_fhd_bbk_H170.dtsi
+
+编译脚本:
+  scripts/build-p21h170.sh
+
+Recovery 模板:
+  scripts/p21h170-recovery-anykernel.sh.in
+
+【故障排除】
+
+问题: 找不到 defconfig
+解决: ls arch/arm64/configs/ums512-p21h170_defconfig
+
+问题: 交叉编译器找不到
+解决: sudo apt install gcc-aarch64-linux-gnu
+
+问题: 编译失败
+解决: 查看完整总结: cat P21H170_ADAPTATION_SUMMARY.md
+
+【验证编译结果】
+
+检查内核镜像:
+  $ file out/release/kernel/arch/arm64/boot/Image
+  预期输出: ELF 64-bit LSB executable, ARM aarch64
+
+检查大小:
+  $ ls -lh out/release/kernel/arch/arm64/boot/Image
+  预期: ~20 MB
+
+【设备刷机】
+
+1. 提取内核镜像
+   $ unzip -j out/release/recovery-p21h170.zip Image
+
+2. 烧录到设备
+   $ fastboot flash boot Image
+
+3. 重启验证
+   $ adb reboot
+   $ adb shell dmesg | grep -i "device tree"
+
+【常用命令速查】
+
+仅编译 (不清理):
+  $ make -C . O=out/ums512-p21h170 -j4
+
+清理构建:
+  $ ./scripts/build-p21h170.sh clean
+
+查看日志:
+  $ tail -100 out/release/build.log
+
+【开发调试】
+
+修改设备树后重新编译:
+  $ rm -rf out/ums512-p21h170/arch/arm64/boot/dts
+  $ ./scripts/build-p21h170.sh kernel
+
+修改驱动后重新编译:
+  $ rm -rf out/ums512-p21h170/drivers
+  $ ./scripts/build-p21h170.sh kernel
+
+【文件清单确认】
+
+必要文件:
+  ✓ ums512-1h170-overlay.dts ............ 设备树
+  ✓ ums512-p21h170_defconfig ........... 编译配置
+  ✓ lcd_ft8201ab_boe_mipi_fhd_bbk_H170.dtsi .... LCD 配置
+  ✓ build-p21h170.sh .................. 编译脚本
+  ✓ p21h170-recovery-anykernel.sh.in .. Recovery 模板
+
+【关键配置点】
+
+设备标识 (sc-id):
+  "ums512 1h170 1000"  ← 用于设备匹配
+
+驱动兼容:
+  "sprd,ums512-1h10"   ← 保持与 P21H180 驱动兼容
+
+LCD 屏幕:
+  FT8201AB BOE MIPI FHD ← H170 特定参数
+
+【支持的编译目标】
+
+kernel ............ 仅编译内核镜像
+recovery .......... 编译并打包 recovery
+socko ............ 与 recovery 相同
+all .............. 完整编译 (默认)
+
+【获取更多信息】
+
+详细文档:
+  $ cat P21H170_ADAPTATION_SUMMARY.md
+
+编译帮助:
+  $ ./scripts/build-p21h170.sh -h
+
+查看脚本:
+  $ cat scripts/build-p21h170.sh
+
+═══════════════════════════════════════════════════════════════════════════
+🎯 现在可以开始编译 P21H170 内核了！
+═══════════════════════════════════════════════════════════════════════════
