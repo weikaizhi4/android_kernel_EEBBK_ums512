@@ -155,6 +155,8 @@ SOCKO_MODULES=(
     drivers/camera/flash/ocp8137/flash_ic_ocp8137.ko
     drivers/camera/mmdvfs/mmdvfs.ko
     drivers/camera/sensor/sprd_sensor.ko
+    drivers/camera/flash/sc2703/flash_ic_sc2703.ko
+    drivers/input/misc/tcs3430/tcs3430.ko
 )
 
 printf 'profile: %s\n' "$PROFILE"
