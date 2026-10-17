@@ -56,6 +56,15 @@ config SPRD_CAMERA_FLASH_OCP8137
 
 	  To compile this driver as a module, choose M here.
 
+config SPRD_CAMERA_FLASH_SC2703
+	tristate "Spreadtrum camera flash sc2703 driver"
+	depends on SPRD_CAMERA_FLASH
+	default n
+	help
+	  Say Y here if your device support Spreadtrum camera flash sc2703 driver.
+
+	  To compile this driver as a module, choose M here.
+
 config SPRD_CAMERA_MMDVFS
 	tristate "Spreadtrum camera mmdvfs driver"
 	default n
