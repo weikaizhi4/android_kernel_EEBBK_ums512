@@ -881,3 +881,12 @@ config INPUT_SENSORS_ST_VL53L0
 	  To compile this driver as a module, choose M here.
 
 endif
+
+config TCS3430
+	tristate "AMS TCS3430 ambient light and XYZ color sensor"
+	depends on I2C
+	help
+	  Say M here to build the AMS TCS3430 ambient light and color (XYZ)
+	  sensor driver as a module. The sensor is found on this platform's
+	  front panel and was previously shipped as a prebuilt module.
+

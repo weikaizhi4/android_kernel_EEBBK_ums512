@@ -156,6 +156,7 @@ SOCKO_MODULES=(
     drivers/camera/flash/ocp8137/flash_ic_ocp8137.ko
     drivers/camera/mmdvfs/mmdvfs.ko
     drivers/camera/sensor/sprd_sensor.ko
+    drivers/input/misc/tcs3430/tcs3430.ko
 )
 
 printf 'profile: %s\n' "$PROFILE"
@@ -300,6 +301,15 @@ done
 "$FUSERMOUNT" -u "$SOCKO_MOUNT"
 SOCKO_MOUNTED=0
 e2fsck -fn "$STAGE/socko.img" >/dev/null
+if (( ${#FACTORY_MODULES[@]} )); then
+    printf '%s\n' "warning: ${#FACTORY_MODULES[@]} module(s) still come from the factory socko image" >&2
+    printf '%s\n' "warning: their symbol CRCs are force-rewritten by patch-module-metadata.pl, so the" >&2
+    printf '%s\n' "warning: ABI against this kernel is unverified (no source in tree):" >&2
+    for factory_module in "${FACTORY_MODULES[@]}"; do
+        printf 'warning:   %s\n' "$(basename "$factory_module")" >&2
+    done
+fi
+
 printf '%s\n' '[4/4] packaging recovery upgrade zip'
 if [[ ! -f "$ANYKERNEL_DIR/anykernel.sh" ]]; then
     printf 'error: AnyKernel3 template not found: %s\n' "$ANYKERNEL_DIR" >&2
