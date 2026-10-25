@@ -103,7 +103,7 @@ export PATH="$TC_DIR:$PATH"
 
 # Keep the release string stable so the kernel and factory modules use the
 # exact same vermagic across reproducible builds.
-KERNEL_LOCALVERSION="-Slimezhao-v1.0"
+KERNEL_LOCALVERSION="-Slimezhao-v1.14-stable"
 KBUILD_BUILD_USER="${KBUILD_BUILD_USER:-twodays}"
 KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST:-P22H190-build}"
 BUILD_TIME="${KBUILD_BUILD_TIMESTAMP:-$(date -u '+%Y-%m-%d %H:%M:%S UTC')}"
