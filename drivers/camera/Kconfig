@@ -59,6 +59,8 @@ config SPRD_CAMERA_FLASH_OCP8137
 config SPRD_CAMERA_FLASH_SC2703
 	tristate "Spreadtrum camera flash sc2703 driver"
 	depends on SPRD_CAMERA_FLASH
+	select REGMAP
+	select REGMAP_I2C
 	default n
 	help
 	  Say Y here if your device support Spreadtrum camera flash sc2703 driver.
