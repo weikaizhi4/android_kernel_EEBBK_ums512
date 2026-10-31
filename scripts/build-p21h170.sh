@@ -5,10 +5,9 @@ set -euo pipefail
 #   kernel  build Image and modules only
 #   recovery build Image, patch socko, and generate one recovery upgrade zip
 #   socko/all aliases for recovery (kept for backwards compatibility)
-# Profiles are selected with P21H170_PROFILE and P21H170_DEFCONFIG. The
-# default profile remains the original P21H170 build; Droidspaces uses:
-#   P21H170_PROFILE=droidspaces
-#   P21H170_DEFCONFIG=ums512-p21h170_droidspaces_defconfig
+# Profiles are selected with P21H170_PROFILE and P21H170_DEFCONFIG.  The
+# default profile builds ums512-p21h170_defconfig.  p21h170 ships a single
+# profile: the Droidspaces defconfig only exists for p22h190.
 TARGET="${1:-all}"
 if [[ "$TARGET" == --target=* ]]; then
     TARGET="${TARGET#--target=}"
@@ -23,9 +22,9 @@ case "$TARGET" in
         printf '  recovery build and package one recovery upgrade zip\n'
         printf '  socko/all aliases for recovery (default)\n'
         printf '\n'
-        printf '  Droidspaces profile:\n'
-        printf '    P21H170_PROFILE=droidspaces \\\n'
-        printf '    P21H170_DEFCONFIG=ums512-p21h170_droidspaces_defconfig \\\n'
+        printf '  Environment overrides:\n'
+        printf '    P21H170_DEFCONFIG=ums512-p21h170_defconfig \\\n'
+        printf '    P21H170_BUILD_DIR=out/ums512-p21h170 \\\n'
         printf '    %s all\n' "$0"
         exit 0
         ;;
@@ -46,13 +45,16 @@ else
 fi
 OUT_DIR="${P21H170_BUILD_DIR:-$SRC_DIR/out/ums512-p21h170${PROFILE_SUFFIX}}"
 DEST_DIR="${P21H170_OUTPUT_DIR:-$SRC_DIR/out/release${PROFILE_SUFFIX}}"
-TC_DIR="${ANDROID_CLANG_DIR:-$SRC_DIR/out/toolchains/clang-r383902/bin}"
-KPM_PATCHER="${KPM_PATCHER:-$SRC_DIR/out/tools/patch_linux}"
+# Toolchain: match the local LineageOS ROM kernel build, i.e. the clang 17
+# prebuilt (r487747c) plus the AOSP/Lineage aarch64 GCC 4.9 binutils, with
+# CROSS_COMPILE=aarch64-linux-android- and CLANG_TRIPLE=aarch64-linux-gnu-.
+TC_DIR="${ANDROID_CLANG_DIR:-$SRC_DIR/out/toolchains/clang-r487747c/bin}"
+GCC_DIR="${ANDROID_GCC_DIR:-$SRC_DIR/out/toolchains/aarch64-linux-android-4.9}"
+CCPREFIX="${CROSS_COMPILE:-aarch64-linux-android-}"
 MODULE_METADATA_PATCHER="${MODULE_METADATA_PATCHER:-$SRC_DIR/tools/patch-module-metadata.pl}"
 SOCKO_TEMPLATE="${SOCKO_TEMPLATE:-$SRC_DIR/prebuilts/p21h170/socko.factory.img}"
 ANYKERNEL_DIR="${ANYKERNEL_DIR:-$SRC_DIR/out/AnyKernel3}"
 RECOVERY_SCRIPT_TEMPLATE="${RECOVERY_SCRIPT_TEMPLATE:-$SRC_DIR/scripts/p21h170-recovery-anykernel.sh.in}"
-ENABLE_KPM="${ENABLE_KPM:-1}"
 FUSERMOUNT="${FUSERMOUNT:-$(command -v fusermount || command -v fusermount3 || true)}"
 
 if [[ ! -f "$SRC_DIR/arch/arm64/configs/$DEFCONFIG" ]]; then
@@ -65,13 +67,17 @@ if [[ ! -x "$TC_DIR/clang" || ! -x "$TC_DIR/ld.lld" ]]; then
     exit 1
 fi
 
-if ! command -v aarch64-linux-gnu-ld >/dev/null 2>&1; then
-    printf 'error: aarch64-linux-gnu binutils are not in PATH\n' >&2
+if [[ -d "$GCC_DIR/bin" ]]; then
+    export PATH="$GCC_DIR/bin:$PATH"
+fi
+
+if ! command -v "${CCPREFIX}ld" >/dev/null 2>&1; then
+    printf 'error: %s binutils are not in PATH (set ANDROID_GCC_DIR)\n' "$CCPREFIX" >&2
     exit 1
 fi
 
 if [[ "$TARGET" != "kernel" ]]; then
-    for command_name in aarch64-linux-gnu-objcopy modinfo modprobe fuse2fs e2fsck zip; do
+    for command_name in "${CCPREFIX}objcopy" modinfo modprobe fuse2fs e2fsck zip; do
         if ! command -v "$command_name" >/dev/null 2>&1; then
             printf 'error: required command not found: %s\n' "$command_name" >&2
             exit 1
@@ -101,14 +107,16 @@ fi
 
 export PATH="$TC_DIR:$PATH"
 
-GIT_HASH="$(git -C "$SRC_DIR" rev-parse --short=12 HEAD)"
-KERNEL_LOCALVERSION="-lwztime-build-g$GIT_HASH"
-if [[ "$PROFILE" != "p21h170" ]]; then
-    KERNEL_LOCALVERSION="-lwztime-$PROFILE-build-g$GIT_HASH"
-fi
-KBUILD_BUILD_USER="${KBUILD_BUILD_USER:-lwztime}"
+# Keep the release string stable so the kernel and factory modules use the
+# exact same vermagic across reproducible builds.
+# Cosmetic only: the effective version comes from CONFIG_LOCALVERSION in the
+# defconfig (currently -Slimezhao-v1.5); read it so logs match the build.
+KERNEL_LOCALVERSION="${KERNEL_LOCALVERSION:-$(sed -n 's/^CONFIG_LOCALVERSION="\(.*\)"/\1/p' \
+    "$SRC_DIR/arch/arm64/configs/$DEFCONFIG" | head -1)}"
+KBUILD_BUILD_USER="${KBUILD_BUILD_USER:-twodays}"
 KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST:-P21H170-build}"
 BUILD_TIME="${KBUILD_BUILD_TIMESTAMP:-$(date -u '+%Y-%m-%d %H:%M:%S UTC')}"
+GIT_HASH="${GIT_HASH:-$(git -C "$SRC_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)}"
 KERNEL_AUTHOR="$KBUILD_BUILD_USER"
 
 MAKE_ARGS=(
@@ -116,16 +124,22 @@ MAKE_ARGS=(
     ARCH=arm64
     CC=clang
     LD=ld.lld
-    CROSS_COMPILE=aarch64-linux-gnu-
+    # clang 17 emits DWARF-5 .file directives that the AOSP/Lineage GCC 4.9
+    # assembler (binutils 2.27) cannot parse; without this the kernel Makefile
+    # adds -no-integrated-as and every object fails to assemble. The local
+    # Lineage kernel build passes LLVM_IAS=1 too.
+    LLVM_IAS=1
+    CROSS_COMPILE="${CCPREFIX}"
     CLANG_TRIPLE=aarch64-linux-gnu-
-    LOCALVERSION="$KERNEL_LOCALVERSION"
     KBUILD_BUILD_USER="$KBUILD_BUILD_USER"
     KBUILD_BUILD_HOST="$KBUILD_BUILD_HOST"
     KBUILD_BUILD_TIMESTAMP="$BUILD_TIME"
 )
 
 JOBS="${JOBS:-$(nproc)}"
-OBJCOPY="${OBJCOPY:-aarch64-linux-gnu-objcopy}"
+# The module metadata patcher needs an objcopy that can dump/update sections;
+# prefer the one shipped with the clang toolchain, else the Android binutils.
+OBJCOPY="${OBJCOPY:-$(command -v llvm-objcopy || echo "${CCPREFIX}objcopy")}"
 
 SOCKO_MODULES=(
     drivers/gpu/arm/midgard/mali_gondul.ko
@@ -141,6 +155,8 @@ SOCKO_MODULES=(
     drivers/camera/flash/ocp8137/flash_ic_ocp8137.ko
     drivers/camera/mmdvfs/mmdvfs.ko
     drivers/camera/sensor/sprd_sensor.ko
+    drivers/camera/flash/sc2703/flash_ic_sc2703.ko
+    drivers/input/misc/tcs3430/tcs3430.ko
 )
 
 printf 'profile: %s\n' "$PROFILE"
@@ -162,6 +178,19 @@ if [[ ! -f "$OUT_DIR/Module.symvers" ]]; then
     printf 'error: build completed without %s\n' "$OUT_DIR/Module.symvers" >&2
     exit 1
 fi
+KERNEL_VERMAGIC=""
+if [[ "$TARGET" != "kernel" ]]; then
+    REFERENCE_MODULE="$(find "$OUT_DIR" -type f -path '*/kernel/*.ko' -print -quit 2>/dev/null || true)"
+    if [[ -z "$REFERENCE_MODULE" ]]; then
+        printf 'error: no built kernel module available to determine vermagic\n' >&2
+        exit 1
+    fi
+    KERNEL_VERMAGIC="$(modinfo -F vermagic "$REFERENCE_MODULE")"
+    if [[ -z "$KERNEL_VERMAGIC" ]]; then
+        printf 'error: cannot read vermagic from %s\n' "$REFERENCE_MODULE" >&2
+        exit 1
+    fi
+fi
 
 STAGE="$(mktemp -d /tmp/p21h170-output.XXXXXX)"
 SOCKO_MOUNT="$STAGE/socko-mount"
@@ -176,27 +205,7 @@ trap cleanup EXIT
 mkdir -p "$STAGE/modules"
 mkdir -p "$STAGE/socko-modules"
 
-if [[ "$ENABLE_KPM" == "1" ]]; then
-    if [[ ! -x "$KPM_PATCHER" ]]; then
-        printf 'error: KPM patcher not found or not executable: %s\n' "$KPM_PATCHER" >&2
-        exit 1
-    fi
-
-    KPM_STAGE="$STAGE/kpm"
-    mkdir -p "$KPM_STAGE"
-    cp -f "$IMAGE" "$KPM_STAGE/Image"
-    (
-        cd "$KPM_STAGE"
-        "$KPM_PATCHER"
-    )
-    if [[ ! -f "$KPM_STAGE/oImage" ]]; then
-        printf 'error: KPM patcher completed without %s\n' "$KPM_STAGE/oImage" >&2
-        exit 1
-    fi
-    cp -f "$KPM_STAGE/oImage" "$STAGE/Image"
-else
-    cp -f "$IMAGE" "$STAGE/Image"
-fi
+cp -f "$IMAGE" "$STAGE/Image"
 cp -f "$OUT_DIR/System.map" "$STAGE/System.map"
 cp -f "$OUT_DIR/.config" "$STAGE/.config"
 
@@ -216,10 +225,6 @@ if [[ "$TARGET" == "kernel" ]]; then
         printf 'clang=%s\n' "$TC_DIR/clang"
         printf 'kernel_release=%s\n' "$KERNEL_RELEASE"
         printf 'git_hash=%s\n' "$GIT_HASH"
-        printf 'kpm=%s\n' "$ENABLE_KPM"
-        if [[ "$ENABLE_KPM" == "1" ]]; then
-            sha256sum "$KPM_PATCHER"
-        fi
         printf 'built_at=%s\n' "$(date -Is)"
         sha256sum "$STAGE/Image"
     } > "$STAGE/build-info.txt"
@@ -275,7 +280,7 @@ done < <(find "$SOCKO_MOUNT" -maxdepth 1 -type f -name '*.ko' -print0)
 
 if ((${#FACTORY_MODULES[@]})); then
     perl "$MODULE_METADATA_PATCHER" \
-        "$OUT_DIR/Module.symvers" "$KERNEL_RELEASE" "$OBJCOPY" \
+        "$OUT_DIR/Module.symvers" "$KERNEL_VERMAGIC" "$OBJCOPY" \
         "${FACTORY_MODULES[@]}"
 fi
 
@@ -356,10 +361,6 @@ rm -rf "$DEST_DIR/modules" "$DEST_DIR/socko-modules"
     printf 'kernel_author=%s\n' "$KERNEL_AUTHOR"
     printf 'build_time=%s\n' "$BUILD_TIME"
     printf 'git_hash=%s\n' "$GIT_HASH"
-    printf 'kpm=%s\n' "$ENABLE_KPM"
-    if [[ "$ENABLE_KPM" == "1" ]]; then
-        sha256sum "$KPM_PATCHER"
-    fi
     printf 'socko_modules=%s\n' "${#SOCKO_MODULES[@]}"
     printf 'socko_factory_modules=%s\n' "${#FACTORY_MODULES[@]}"
     printf 'socko_template=%s\n' "$SOCKO_TEMPLATE"
