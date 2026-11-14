@@ -1575,10 +1575,12 @@ struct wireless_dev *sprdwl_add_iface(struct sprdwl_priv *priv,
 {
 	struct sprdwl_vif *vif;
 
-	if (type == NL80211_IFTYPE_P2P_DEVICE)
-		vif = sprdwl_register_wdev(priv, name, type, addr);
-	else
-		vif = sprdwl_register_netdev(priv, name, type, addr);
+	/* Android 13+ wificond expects the P2P device to be a real netdev
+	 * (p2p0).  Register a netdev for NL80211_IFTYPE_P2P_DEVICE too;
+	 * nl80211_new_interface() is patched to skip the extra wdev
+	 * registration when the driver already provided a netdev.
+	 */
+	vif = sprdwl_register_netdev(priv, name, type, addr);
 
 	if (IS_ERR(vif)) {
 		wl_err("failed to add iface '%s'\n", name);

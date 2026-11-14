@@ -3018,9 +3018,13 @@ static int nl80211_new_interface(struct sk_buff *skb, struct genl_info *info)
 	case NL80211_IFTYPE_NAN:
 	case NL80211_IFTYPE_P2P_DEVICE:
 		/*
-		 * P2P Device and NAN do not have a netdev, so don't go
-		 * through the netdev notifier and must be added here
+		 * P2P Device and NAN usually have no netdev, so they are
+		 * added here.  Some drivers (sprdwl) register a netdev for
+		 * the P2P device; in that case the netdev notifier already
+		 * registered the wdev, so skip the manual registration.
 		 */
+		if (wdev->netdev)
+			break;
 		mutex_init(&wdev->mtx);
 		INIT_LIST_HEAD(&wdev->event_list);
 		spin_lock_init(&wdev->event_lock);
