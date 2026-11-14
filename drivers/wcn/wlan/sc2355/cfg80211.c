@@ -2871,6 +2871,15 @@ static int sprdwl_cfg80211_start_p2p_device(struct wiphy *wiphy,
 
 	netdev_info(vif->ndev, "%s\n", __func__);
 
+	/* When the P2P device is backed by a real netdev its firmware
+	 * context is already opened by ndo_init (sprdwl_init()), so calling
+	 * sprdwl_init_fw() here fails with -EBUSY and wpa_supplicant aborts
+	 * the whole P2P interface setup. Legacy (netdev-less) P2P devices
+	 * still need the explicit init.
+	 */
+	if (vif->ndev)
+		return 0;
+
 	return sprdwl_init_fw(vif);
 }
 
@@ -2881,7 +2890,9 @@ static void sprdwl_cfg80211_stop_p2p_device(struct wiphy *wiphy,
 
 	netdev_info(vif->ndev, "%s\n", __func__);
 
-	sprdwl_uninit_fw(vif);
+	/* ndo_uninit (sprdwl_uninit()) releases the firmware context. */
+	if (!vif->ndev)
+		sprdwl_uninit_fw(vif);
 
 	if (vif->priv->scan_request)
 		sprdwl_scan_done(vif, true);
