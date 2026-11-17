@@ -1293,4 +1293,5 @@ config TOUCHSCREEN_ILI9882N
 	  To compile this driver as a module, choose M here: the
 	  module will be called ili9882n-tddi.
 source "drivers/input/touchscreen/ili9882n/Kconfig"
+source "drivers/input/touchscreen/nt36xxx/Kconfig"
 endif
