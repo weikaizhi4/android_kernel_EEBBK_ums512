@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * A7 NT36532 alternative on the same touch bus/reset/interrupt lines as
+ * FTS. The NVT driver rejects other lcd_name values before requesting GPIOs.
+ * GPIO assignments follow the existing H170/H180 FTS board description;
+ * verify against the running DT when testing a different panel revision.
+ */
+&i2c3 {
+	novatek@62 {
+		compatible = "novatek,nt36532", "novatek,NVT-ts";
+		reg = <0x62>;
+		status = "okay";
+		novatek,reset-gpio = <&ap_gpio 145 GPIO_ACTIVE_HIGH>;
+		novatek,irq-gpio = <&eic_async 0 GPIO_ACTIVE_HIGH>;
+	};
+};
