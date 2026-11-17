@@ -114,3 +114,4 @@ obj-y   += tp_pannel_notifier.o
 obj-$(CONFIG_TOUCHSCREEN_CHIPONE) += chipone-ts/
 obj-$(CONFIG_TOUCHSCREEN_FTS) += focaltech_touch/
 obj-$(CONFIG_TOUCHSCREEN_ILI9882N) += ili9882n/
+obj-$(CONFIG_TOUCHSCREEN_NT36XXX) += nt36xxx/
