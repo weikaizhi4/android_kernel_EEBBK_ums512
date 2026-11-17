@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0
+config TOUCHSCREEN_NT36XXX
+	bool "Novatek NT36532 I2C touchscreen for EEBBK A7"
+	depends on I2C && OF && GPIOLIB && DRM_SPRD
+	help
+	  Finger touch support for the NT36532 Tianma panel on P21H170.
+	  Uses the controller's existing flash firmware and the Spreadtrum
+	  display power notifier to handle initialization, suspend and resume.
+	  This does not enable Novatek SPI controllers or firmware flashing.
