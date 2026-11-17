@@ -899,3 +899,6 @@
 	tuning-latency-us = <0>;
 	chnl-in-i2c = <1>;
 };
+
+/* A7 Novatek alternative; retain existing panel timing/commands. */
+#include "ums512-p21h170-touch.dtsi"
