@@ -291,4 +291,13 @@ flow_dissector_init_keys(struct flow_dissector_key_control *key_control,
 	memset(key_basic, 0, sizeof(*key_basic));
 }
 
+
+/* backported from 5.x */
+struct bpf_flow_dissector {
+	struct bpf_flow_keys	*flow_keys;
+	const struct sk_buff	*skb;
+	void			*data;
+	void			*data_end;
+};
+
 #endif

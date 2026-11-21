@@ -194,6 +194,11 @@ enum bpf_attach_type {
 	BPF_CGROUP_SYSCTL = 18,
 	BPF_CGROUP_UDP4_RECVMSG = 19,
 	BPF_CGROUP_UDP6_RECVMSG = 20,
+	BPF_TRACE_RAW_TP = 21,
+	BPF_TRACE_FEXIT = 22,
+	BPF_MODIFY_RETURN = 23,
+	BPF_LSM_MAC = 24,
+	BPF_TRACE_ITER = 25,
 	BPF_CGROUP_GETSOCKOPT = 21,
 	BPF_CGROUP_SETSOCKOPT = 22,
 	__MAX_BPF_ATTACH_TYPE
@@ -1679,5 +1684,22 @@ struct bpf_sockopt {
 	__s32	optlen;
 	__s32	retval;
 };
+
+
+/* BTF dump flags, used by btf_type_seq_show_flags() */
+enum {
+	BTF_F_COMPACT	=	(1ULL << 0),
+	BTF_F_NONAME	=	(1ULL << 1),
+	BTF_F_PTR_RAW	=	(1ULL << 2),
+	BTF_F_ZERO	=	(1ULL << 3),
+};
+
+
+/* BPF_OBJ_GET_INFO_BY_FD info for BTF objects */
+struct bpf_btf_info {
+	__aligned_u64 btf;
+	__u32 btf_size;
+	__u32 id;
+} __attribute__((aligned(8)));
 
 #endif /* _UAPI__LINUX_BPF_H__ */
