@@ -174,10 +174,11 @@ else
 	# annotated or signed tagged state (as git describe only
 	# looks at signed or annotated tags - git tag -a/-s) and
 	# LOCALVERSION= is not specified
-	if test "${LOCALVERSION+set}" != "set"; then
-		scm=$(scm_version --short)
-		res="$res${scm:++}"
-	fi
+	# This tree reports a fixed release string: do not append the
+	# "not at an annotated tag" plus sign, so uname -r matches
+	# CONFIG_LOCALVERSION exactly.  Dirty-tree detection is already
+	# inactive because CONFIG_LOCALVERSION_AUTO is not set.
+	:
 fi
 
 echo "$res"
