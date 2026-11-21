@@ -1205,12 +1205,22 @@ SYSCALL_DEFINE1(newuname, struct new_utsname __user *, name)
 	if (static_branch_likely(&susfs_is_uname_spoof_buffer_set))
 		susfs_spoof_uname(&tmp);
 #endif
+	/*
+	 * Android's bpfloader gates every BPF program on the kernel version it
+	 * reads from uname(2): each program carries min_kver/max_kver and
+	 * bpfloader_min_ver/max_ver, and anything outside the range is simply
+	 * skipped.  Reporting 5.10.199 here (same value the raphael kernel uses)
+	 * makes the 5.10-gated Android 17 programs eligible to load on this
+	 * 4.14 kernel.  Only root loaders are affected.
+	 */
 	if (!strncmp(current->comm, "bpfloader", 9) ||
 	    !strncmp(current->comm, "netbpfload", 10) ||
 	    !strncmp(current->comm, "netd", 4)) {
-		strcpy(tmp.release, "5.4.186");
-		pr_debug("fake uname: %s release=%s\n",
-			 current->comm, tmp.release);
+		if (current_uid().val == 0) {
+			strcpy(tmp.release, "5.10.199");
+			pr_debug("fake uname: %s/%d release=%s\n",
+				 current->comm, current->pid, tmp.release);
+		}
 	}
 	up_read(&uts_sem);
 	if (copy_to_user(name, &tmp, sizeof(tmp)))
