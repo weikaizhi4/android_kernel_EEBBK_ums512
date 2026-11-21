@@ -1,0 +1,37 @@
+Novatek NT36532 I2C touchscreen on EEBBK P21H170
+================================================
+
+Required properties:
+- compatible: "novatek,nt36532", "novatek,NVT-ts". The legacy factory
+  compatible "novatek,NVT-ts" is also accepted on its own.
+- reg: <0x62>, the hardware-command address. Runtime firmware transfers
+  use the same controller's 0x01 address; do not create a second device.
+- novatek,reset-gpio: reset GPIO, active high for the raw GPIO API used
+  by this vendor driver (high deasserts reset).
+- novatek,irq-gpio: interrupt GPIO, configured as an input. Defaults to
+  a rising-edge IRQ, matching the A7 touch-fix driver.
+
+The driver is restricted to lcd_name=lcd_nt36532_tianma_mipi_fhd_bbk_H170
+when a panel name is supplied. Other panels must use their own driver.
+Resolution is read from valid controller firmware info; it is not set by
+the FocalTech display-coords property of an alternative device.
+
+Optional properties:
+- interrupts and interrupt-parent: an explicit IRQ specifier, if used by
+  the platform. Its trigger type takes precedence over the default.
+
+Example on the existing H170/H180 shared touch pins:
+
+&i2c3 {
+    novatek@62 {
+        compatible = "novatek,nt36532", "novatek,NVT-ts";
+        reg = <0x62>;
+        novatek,reset-gpio = <&ap_gpio 145 GPIO_ACTIVE_HIGH>;
+        novatek,irq-gpio = <&eic_async 0 GPIO_ACTIVE_HIGH>;
+    };
+};
+
+Those GPIOs are taken from the repository's existing FTS board nodes.
+The supplied device logs confirm bus 3 and address 0x62 but do not contain
+a full NVT GPIO dump. Verify the assignments on hardware before release.
+The NVT and FTS alternatives must not request the shared GPIOs together.
