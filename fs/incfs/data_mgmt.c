@@ -107,7 +107,6 @@ void incfs_free_mount_info(struct mount_info *mi)
 	flush_delayed_work(&mi->mi_log.ml_wakeup_work);
 
 	dput(mi->mi_index_dir);
-	dput(mi->mi_incomplete_dir);
 	path_put(&mi->mi_backing_dir_path);
 	mutex_destroy(&mi->mi_dir_struct_mutex);
 	mutex_destroy(&mi->mi_pending_reads_mutex);
@@ -191,32 +190,10 @@ out:
 
 void incfs_free_data_file(struct data_file *df)
 {
-	u32 data_blocks_written, hash_blocks_written;
+	int i;
 
 	if (!df)
 		return;
-
-	data_blocks_written = atomic_read(&df->df_data_blocks_written);
-	hash_blocks_written = atomic_read(&df->df_hash_blocks_written);
-
-	if (data_blocks_written != df->df_initial_data_blocks_written ||
-	    hash_blocks_written != df->df_initial_hash_blocks_written) {
-		struct backing_file_context *bfc = df->df_backing_file_context;
-		int error = -1;
-
-		if (bfc && !mutex_lock_interruptible(&bfc->bc_mutex)) {
-			error = incfs_write_status_to_backing_file(
-						df->df_backing_file_context,
-						df->df_status_offset,
-						data_blocks_written,
-						hash_blocks_written);
-			mutex_unlock(&bfc->bc_mutex);
-		}
-
-		if (error)
-			/* Nothing can be done, just warn */
-			pr_warn("incfs: failed to write status to backing file\n");
-	}
 
 	incfs_free_mtree(df->df_hash_tree);
 	for (i = 0; i < ARRAY_SIZE(df->df_segments); i++)
@@ -854,8 +831,9 @@ static int wait_for_data_block(struct data_file *df, int block_index,
 		return -ENODATA;
 
 	segment = get_file_segment(df, block_index);
-
-	down_read(&segment->rwsem);
+	error = mutex_lock_interruptible(&segment->blockmap_mutex);
+	if (error)
+		return error;
 
 	/* Look up the given block */
 	error = get_data_file_block(df, block_index, &block);
@@ -907,7 +885,9 @@ static int wait_for_data_block(struct data_file *df, int block_index,
 		return wait_res;
 	}
 
-	down_read(&segment->rwsem);
+	error = mutex_lock_interruptible(&segment->blockmap_mutex);
+	if (error)
+		return error;
 
 	/*
 	 * Re-read block's info now, it has just arrived and
@@ -943,7 +923,7 @@ ssize_t incfs_read_data_file_block(struct mem_range dst, struct file *f,
 	struct data_file_block block = {};
 	struct data_file *df = get_incfs_data_file(f);
 
-	if (!dst.data || !df || !tmp.data)
+	if (!dst.data || !df)
 		return -EFAULT;
 
 	if (tmp.len < 2 * INCFS_DATA_FILE_BLOCK_SIZE)
@@ -1022,7 +1002,9 @@ int incfs_process_new_data_block(struct data_file *df,
 	if (block->compression == COMPRESSION_LZ4)
 		flags |= INCFS_BLOCK_COMPRESSED_LZ4;
 
-	down_read(&segment->rwsem);
+	error = mutex_lock_interruptible(&segment->blockmap_mutex);
+	if (error)
+		return error;
 
 	error = get_data_file_block(df, block->block_index, &existing_block);
 	if (error)
@@ -1120,9 +1102,6 @@ int incfs_process_new_hash_block(struct data_file *df,
 			hash_area_base, df->df_blockmap_off, df->df_size);
 		mutex_unlock(&bfc->bc_mutex);
 	}
-	if (!error)
-		atomic_inc(&df->df_hash_blocks_written);
-
 	return error;
 }
 
@@ -1237,26 +1216,6 @@ out:
 	kfree(buf);
 
 	return error;
-}
-
-static int process_status_md(struct incfs_status *is,
-			     struct metadata_handler *handler)
-{
-	struct data_file *df = handler->context;
-
-	df->df_initial_data_blocks_written =
-		le32_to_cpu(is->is_data_blocks_written);
-	atomic_set(&df->df_data_blocks_written,
-		   df->df_initial_data_blocks_written);
-
-	df->df_initial_hash_blocks_written =
-		le32_to_cpu(is->is_hash_blocks_written);
-	atomic_set(&df->df_hash_blocks_written,
-		   df->df_initial_hash_blocks_written);
-
-	df->df_status_offset = handler->md_record_offset;
-
-	return 0;
 }
 
 int incfs_scan_metadata_chain(struct data_file *df)

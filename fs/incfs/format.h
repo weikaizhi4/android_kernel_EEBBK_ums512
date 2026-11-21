@@ -136,16 +136,16 @@ struct incfs_md_header {
 	__le16 h_record_size;
 
 	/*
-	 * Was: CRC32 of the metadata record.
+	 * CRC32 of the metadata record.
 	 * (e.g. inode, dir entry etc) not just this struct.
 	 */
-	__le32 h_unused1;
+	__le32 h_record_crc;
 
 	/* Offset of the next metadata entry if any */
 	__le64 h_next_md_offset;
 
-	/* Was: Offset of the previous metadata entry if any */
-	__le64 h_unused2;
+	/* Offset of the previous metadata entry if any */
+	__le64 h_prev_md_offset;
 
 } __packed;
 
@@ -243,16 +243,6 @@ struct incfs_df_signature {
 	u64 hash_offset;
 };
 
-struct incfs_status {
-	struct incfs_md_header is_header;
-
-	__le32 is_data_blocks_written; /* Number of data blocks written */
-
-	__le32 is_hash_blocks_written; /* Number of hash blocks written */
-
-	__le32 is_dummy[6]; /* Spare fields */
-};
-
 /* State of the backing file. */
 struct backing_file_context {
 	/* Protects writes to bc_file */
@@ -321,11 +311,6 @@ int incfs_write_file_attr_to_backing_file(struct backing_file_context *bfc,
 
 int incfs_write_signature_to_backing_file(struct backing_file_context *bfc,
 					  struct mem_range sig, u32 tree_size);
-
-int incfs_write_status_to_backing_file(struct backing_file_context *bfc,
-				       loff_t status_offset,
-				       u32 data_blocks_written,
-				       u32 hash_blocks_written);
 
 int incfs_write_file_header_flags(struct backing_file_context *bfc, u32 flags);
 
