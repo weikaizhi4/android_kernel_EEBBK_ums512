@@ -377,6 +377,10 @@ struct bpf_nested_pt_regs {
 	struct pt_regs regs[3];
 };
 static DEFINE_PER_CPU(struct bpf_nested_pt_regs, bpf_pt_regs);
+struct bpf_trace_sample_data {
+	struct perf_sample_data sds[3];
+};
+
 static DEFINE_PER_CPU(struct bpf_trace_sample_data, bpf_misc_sds);
 
 u64 bpf_event_output(struct bpf_map *map, u64 flags, void *meta, u64 meta_size,

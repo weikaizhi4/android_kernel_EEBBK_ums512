@@ -561,20 +561,19 @@ DECLARE_PER_CPU(int, bpf_prog_active);
  */
 static inline void bpf_disable_instrumentation(void)
 {
-	migrate_disable();
-	if (IS_ENABLED(CONFIG_PREEMPT_RT))
-		this_cpu_inc(bpf_prog_active);
-	else
-		__this_cpu_inc(bpf_prog_active);
+	/*
+	 * This tree has no migrate_disable(); it is identical to
+	 * preempt_disable() on non-RT kernels, which is what upstream ends up
+	 * using here too.
+	 */
+	preempt_disable();
+	__this_cpu_inc(bpf_prog_active);
 }
 
 static inline void bpf_enable_instrumentation(void)
 {
-	if (IS_ENABLED(CONFIG_PREEMPT_RT))
-		this_cpu_dec(bpf_prog_active);
-	else
-		__this_cpu_dec(bpf_prog_active);
-	migrate_enable();
+	__this_cpu_dec(bpf_prog_active);
+	preempt_enable();
 }
 
 extern const struct file_operations bpf_map_fops;
