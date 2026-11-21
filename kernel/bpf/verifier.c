@@ -3677,7 +3677,7 @@ static int adjust_ptr_min_max_vals(struct bpf_verifier_env *env,
 	}
 	if (ptr_reg->type == PTR_TO_MAP_VALUE) {
 		if (!env->allow_ptr_leaks && !known && (smin_val < 0) != (smax_val < 0)) {
-			verbose("R%d has unknown scalar with mixed signed bounds, pointer arithmetic with it prohibited for !root\n",
+			verbose(env, "R%d has unknown scalar with mixed signed bounds, pointer arithmetic with it prohibited for !root\n",
 				off_reg == dst_reg ? dst : src);
 			return -EACCES;
 		}

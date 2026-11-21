@@ -2505,6 +2505,23 @@ static const struct bpf_func_proto bpf_skb_change_tail_proto = {
 BPF_CALL_3(sk_skb_change_tail, struct sk_buff *, skb, u32, new_len,
 	   u64, flags)
 {
+	int ret = __bpf_skb_change_tail(skb, new_len, flags);
+	bpf_compute_data_end_sk_skb(skb);
+	return ret;
+}
+
+static const struct bpf_func_proto sk_skb_change_tail_proto = {
+	.func		= sk_skb_change_tail,
+	.gpl_only	= false,
+	.ret_type	= RET_INTEGER,
+	.arg1_type	= ARG_PTR_TO_CTX,
+	.arg2_type	= ARG_ANYTHING,
+	.arg3_type	= ARG_ANYTHING,
+};
+
+static inline int __bpf_skb_change_head(struct sk_buff *skb, u32 head_room,
+					u64 flags)
+{
 	u32 max_len = BPF_SKB_MAX_LEN;
 	u32 new_len = skb->len + head_room;
 	int ret;
@@ -2532,6 +2549,7 @@ BPF_CALL_3(sk_skb_change_tail, struct sk_buff *, skb, u32, new_len,
 
 	return ret;
 }
+
 BPF_CALL_3(bpf_skb_change_head, struct sk_buff *, skb, u32, head_room,
 	   u64, flags)
 {
