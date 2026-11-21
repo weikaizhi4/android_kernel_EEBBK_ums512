@@ -613,7 +613,7 @@ static inline void mod_lruvec_state(struct lruvec *lruvec,
 		return;
 	pn = container_of(lruvec, struct mem_cgroup_per_node, lruvec);
 	mod_memcg_state(pn->memcg, idx, val);
-	this_cpu_add(pn->lruvec_stat->count[idx], val);
+	this_cpu_add(pn->lruvec_stat_cpu->count[idx], val);
 }
 
 static inline void __mod_lruvec_page_state(struct page *page,
@@ -626,7 +626,7 @@ static inline void __mod_lruvec_page_state(struct page *page,
 		return;
 	__mod_memcg_state(page->mem_cgroup, idx, val);
 	pn = page->mem_cgroup->nodeinfo[page_to_nid(page)];
-	__this_cpu_add(pn->lruvec_stat->count[idx], val);
+	__this_cpu_add(pn->lruvec_stat_cpu->count[idx], val);
 }
 
 static inline void mod_lruvec_page_state(struct page *page,
@@ -639,7 +639,7 @@ static inline void mod_lruvec_page_state(struct page *page,
 		return;
 	mod_memcg_state(page->mem_cgroup, idx, val);
 	pn = page->mem_cgroup->nodeinfo[page_to_nid(page)];
-	this_cpu_add(pn->lruvec_stat->count[idx], val);
+	this_cpu_add(pn->lruvec_stat_cpu->count[idx], val);
 }
 
 unsigned long mem_cgroup_soft_limit_reclaim(pg_data_t *pgdat, int order,
