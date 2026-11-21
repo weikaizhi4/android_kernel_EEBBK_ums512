@@ -1664,6 +1664,12 @@ int wait_for_random_bytes(void)
 }
 EXPORT_SYMBOL(wait_for_random_bytes);
 
+bool rng_is_initialized(void)
+{
+	return crng_ready();
+}
+EXPORT_SYMBOL(rng_is_initialized);
+
 /*
  * Add a callback function that will be invoked when the nonblocking
  * pool is initialised.

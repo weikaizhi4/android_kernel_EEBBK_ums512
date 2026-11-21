@@ -99,6 +99,7 @@
 
 #include <crypto/drbg.h>
 #include <linux/kernel.h>
+#include <linux/random.h>
 
 /***************************************************************
  * Backend cipher definitions available to DRBG
