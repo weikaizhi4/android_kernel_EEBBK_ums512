@@ -32,6 +32,10 @@ struct btf_type;
 
 /* map is generic key/value storage optionally accesible by eBPF programs */
 struct bpf_map_ops {
+	/* BTF name and id of struct allocated by map_alloc */
+	const char * const map_btf_name;
+	int *map_btf_id;
+
 	/* funcs callable from userspace (via syscall) */
 	int (*map_alloc_check)(union bpf_attr *attr);
 	struct bpf_map *(*map_alloc)(union bpf_attr *attr);
@@ -319,6 +323,7 @@ enum bpf_reg_type {
 struct bpf_insn_access_aux {
 	enum bpf_reg_type reg_type;
 	int ctx_field_size;
+	struct bpf_verifier_log *log;
 };
 
 static inline void
@@ -399,6 +404,12 @@ struct bpf_prog_aux {
 	struct bpf_prog_offload *offload;
 	struct btf *btf;
 	struct bpf_func_info *func_info;
+
+	/* for tracing/struct_ops progs (backported fields, unused here) */
+	struct bpf_prog *dst_prog;
+	const struct btf_type *attach_func_proto;
+	const char *attach_func_name;
+	bool attach_btf_trace;
 	/* bpf_line_info loaded from userspace.  linfo->insn_off
 	 * has the xlated insn offset.
 	 * Both the main and sub prog share the same linfo.
@@ -579,12 +590,14 @@ static inline void bpf_enable_instrumentation(void)
 extern const struct file_operations bpf_map_fops;
 extern const struct file_operations bpf_prog_fops;
 
-#define BPF_PROG_TYPE(_id, _name) \
+#define BPF_PROG_TYPE(_id, _name, prog_ctx_type, kern_ctx_type) \
 	extern const struct bpf_prog_ops _name ## _prog_ops; \
 	extern const struct bpf_verifier_ops _name ## _verifier_ops;
 #define BPF_MAP_TYPE(_id, _ops) \
 	extern const struct bpf_map_ops _ops;
+#define BPF_LINK_TYPE(_id, _name)
 #include <linux/bpf_types.h>
+#undef BPF_LINK_TYPE
 #undef BPF_PROG_TYPE
 #undef BPF_MAP_TYPE
 
