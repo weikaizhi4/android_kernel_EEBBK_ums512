@@ -28,11 +28,8 @@
 #include <asm/page-def.h>
 #include <asm/sizes.h>
 
-/*
- * Allow for constants defined here to be used from assembly code
- * by prepending the UL suffix only with actual C code compilation.
- */
-#define UL(x) _AC(x, UL)
+/* UL()/_AC() now come from include/linux/const.h (as upstream does). */
+#include <linux/const.h>
 
 /*
  * Size of the PCI I/O space. This must remain a power of two so that
