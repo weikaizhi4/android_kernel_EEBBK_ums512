@@ -3930,7 +3930,7 @@ static int ext4_rename(struct inode *old_dir, struct dentry *old_dentry,
 		goto release_bh;
 
 	if ((old.dir != new.dir) &&
-	    ext4_encrypted_inode(new.dir) &&
+	    IS_ENCRYPTED(new.dir) &&
 	    !fscrypt_has_permitted_context(new.dir, old.inode)) {
 		retval = -EXDEV;
 		goto release_bh;
