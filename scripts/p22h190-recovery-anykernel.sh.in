@@ -53,4 +53,30 @@ blockdev --setrw "$SOCKO_BLOCK" 2>/dev/null;
 dd if="$AKHOME/socko.img" of="$SOCKO_BLOCK" bs=4M || abort "Flashing socko failed. Aborting...";
 sync;
 
+ui_print "Flashing vendor_dlkm";
+# vendor_dlkm is the second module location: ext4, mounted at /vendor_dlkm,
+# modules flat in lib/modules.  Only the LineageOS-style layout has it, so
+# flash when the partition is there and skip when it is not.
+VDLKM_BLOCK="";
+for vdlkm_candidate in /dev/block/mapper/vendor_dlkm /dev/block/by-name/vendor_dlkm; do
+    if [ -e "$vdlkm_candidate" ]; then
+        VDLKM_BLOCK="$vdlkm_candidate";
+        break;
+    fi;
+done;
+if [ -z "$VDLKM_BLOCK" ]; then
+    ui_print "  vendor_dlkm partition not present, skipped";
+elif [ ! -f "$AKHOME/vendor_dlkm.img" ]; then
+    ui_print "  no vendor_dlkm image in the package, skipped";
+else
+    vdlkm_image_size=$(wc -c < "$AKHOME/vendor_dlkm.img");
+    vdlkm_block_size=$(blockdev --getsize64 "$VDLKM_BLOCK" 2>/dev/null);
+    [ "$vdlkm_block_size" ] || abort "Unable to determine vendor_dlkm partition size. Aborting...";
+    [ "$vdlkm_image_size" -le "$vdlkm_block_size" ] || abort "vendor_dlkm image is larger than its partition. Aborting...";
+    blockdev --setrw "$VDLKM_BLOCK" 2>/dev/null;
+    dd if="$AKHOME/vendor_dlkm.img" of="$VDLKM_BLOCK" bs=4M || abort "Flashing vendor_dlkm failed. Aborting...";
+    sync;
+    ui_print "  vendor_dlkm flashed";
+fi;
+
 ui_print "Done";

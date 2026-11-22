@@ -99,7 +99,7 @@ jobs:
             p22h190)
               KERNEL_PREFIX=P22H190
               BUILD_SCRIPT=./scripts/build-p22h190.sh
-              SOCKO="$GITHUB_WORKSPACE/prebuilts/p22h190/socko.factory.img"
+              SOCKO="$GITHUB_WORKSPACE/prebuilts/socko.factory.img"
               case "$BUILD_PROFILE" in
                 standard)
                   profile=p22h190
@@ -126,7 +126,7 @@ jobs:
               fi
               KERNEL_PREFIX=P21H180
               BUILD_SCRIPT=./scripts/build-p21h180.sh
-              SOCKO="$GITHUB_WORKSPACE/prebuilts/p21h180/socko.factory.img"
+              SOCKO="$GITHUB_WORKSPACE/prebuilts/socko.factory.img"
               profile=p21h180
               defconfig=ums512-p21h180_defconfig
               build_dir="$GITHUB_WORKSPACE/out/ums512-p21h180"
@@ -139,7 +139,7 @@ jobs:
               fi
               KERNEL_PREFIX=P21H170
               BUILD_SCRIPT=./scripts/build-p21h170.sh
-              SOCKO="$GITHUB_WORKSPACE/prebuilts/p21h170/socko.factory.img"
+              SOCKO="$GITHUB_WORKSPACE/prebuilts/socko.factory.img"
               profile=p21h170
               defconfig=ums512-p21h170_defconfig
               build_dir="$GITHUB_WORKSPACE/out/ums512-p21h170"
@@ -153,7 +153,7 @@ jobs:
           if [ ! -f "$SOCKO" ]; then
             echo "error: missing $SOCKO" >&2
             echo "       the recovery package patches the factory socko partition image;" >&2
-            echo "       dump it from a stock $BUILD_DEVICE and commit it before running this job" >&2
+            echo "       it is shared by every device; restore it before running this job" >&2
             echo "       (the kernel-only target does not need it: $BUILD_SCRIPT kernel)" >&2
             exit 2
           fi

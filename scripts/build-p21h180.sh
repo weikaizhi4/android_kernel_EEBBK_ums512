@@ -52,7 +52,7 @@ TC_DIR="${ANDROID_CLANG_DIR:-$SRC_DIR/out/toolchains/clang-r487747c/bin}"
 GCC_DIR="${ANDROID_GCC_DIR:-$SRC_DIR/out/toolchains/aarch64-linux-android-4.9}"
 CCPREFIX="${CROSS_COMPILE:-aarch64-linux-android-}"
 MODULE_METADATA_PATCHER="${MODULE_METADATA_PATCHER:-$SRC_DIR/tools/patch-module-metadata.pl}"
-SOCKO_TEMPLATE="${SOCKO_TEMPLATE:-$SRC_DIR/prebuilts/p21h180/socko.factory.img}"
+SOCKO_TEMPLATE="${SOCKO_TEMPLATE:-$SRC_DIR/prebuilts/socko.factory.img}"
 ANYKERNEL_DIR="${ANYKERNEL_DIR:-$SRC_DIR/out/AnyKernel3}"
 RECOVERY_SCRIPT_TEMPLATE="${RECOVERY_SCRIPT_TEMPLATE:-$SRC_DIR/scripts/p21h180-recovery-anykernel.sh.in}"
 FUSERMOUNT="${FUSERMOUNT:-$(command -v fusermount || command -v fusermount3 || true)}"
@@ -301,7 +301,67 @@ done
 "$FUSERMOUNT" -u "$SOCKO_MOUNT"
 SOCKO_MOUNTED=0
 e2fsck -fn "$STAGE/socko.img" >/dev/null
-printf '%s\n' '[4/4] packaging recovery upgrade zip'
+printf '%s\n' '[4/5] building vendor_dlkm image'
+VDLKM_ROOT="$STAGE/vendor_dlkm"
+VDLKM_MODDIR="$VDLKM_ROOT/lib/modules"
+mkdir -p "$VDLKM_MODDIR" "$VDLKM_ROOT/etc"
+
+# vendor_dlkm is the second module location: an ext4 partition mounted at
+# /vendor_dlkm with the .ko files flat in lib/modules (see
+# BOARD_VENDOR_DLKMIMAGE_FILE_SYSTEM_TYPE in the device tree).  It only exists
+# on the LineageOS-style layout, so the installer flashes it when the partition
+# is there and skips it otherwise.
+#
+# Seed from the AOSP build tree when it is reachable: modules that only ship as
+# vendor prebuilts (fingerprint, touch) and etc/build.prop have to survive.
+VENDOR_DLKM_BASE="${VENDOR_DLKM_BASE:-$SRC_DIR/../../../out/target/product/$PROFILE/vendor_dlkm}"
+if [[ -d "$VENDOR_DLKM_BASE/lib/modules" ]]; then
+    cp -a "$VENDOR_DLKM_BASE/lib/modules/." "$VDLKM_MODDIR/"
+    if [[ -f "$VENDOR_DLKM_BASE/etc/build.prop" ]]; then
+        cp -f "$VENDOR_DLKM_BASE/etc/build.prop" "$VDLKM_ROOT/etc/build.prop"
+    fi
+    printf 'vendor_dlkm: seeded from %s\n' "$VENDOR_DLKM_BASE"
+else
+    printf 'vendor_dlkm: no base tree at %s; image carries this kernel modules only\n' \
+        "$VENDOR_DLKM_BASE"
+fi
+
+VENDOR_DLKM_MODULES=0
+while IFS= read -r -d '' module; do
+    cp -f "$module" "$VDLKM_MODDIR/$(basename "$module")"
+    VENDOR_DLKM_MODULES=$((VENDOR_DLKM_MODULES + 1))
+done < <(find "$OUT_DIR" -type f -name '*.ko' -print0)
+
+# Rebuild the module index for the merged set.  depmod wants a versioned
+# directory and emits bare names, while vendor_dlkm keeps the files flat and
+# indexes them by absolute path.
+DEPMOD_ROOT="$STAGE/vendor_dlkm-depmod"
+rm -rf "$DEPMOD_ROOT"
+mkdir -p "$DEPMOD_ROOT/lib/modules/$KERNEL_RELEASE"
+cp -f "$VDLKM_MODDIR"/*.ko "$DEPMOD_ROOT/lib/modules/$KERNEL_RELEASE/"
+depmod -b "$DEPMOD_ROOT" -a "$KERNEL_RELEASE" >/dev/null 2>&1 || true
+for index in modules.dep modules.alias modules.softdep; do
+    [[ -f "$DEPMOD_ROOT/lib/modules/$KERNEL_RELEASE/$index" ]] || continue
+    sed -E 's@(^|: )([^ :]+\.ko)@\1/vendor_dlkm/lib/modules/\2@g' \
+        "$DEPMOD_ROOT/lib/modules/$KERNEL_RELEASE/$index" > "$VDLKM_MODDIR/$index"
+done
+if [[ ! -f "$VDLKM_MODDIR/modules.load" ]]; then
+    printf '%s\n' mali_gondul kheaders \
+        trace_irqsoff_bytedancy trace_noschedule_bytedancy \
+        trace_runqlat_bytedancy incrementalfs > "$VDLKM_MODDIR/modules.load"
+fi
+
+chmod -R u=rwX,go=rX "$VDLKM_ROOT"
+VENDOR_DLKM_IMG="$STAGE/vendor_dlkm.img"
+rm -f "$VENDOR_DLKM_IMG"
+mke2fs -q -F -t ext4 -L vendor_dlkm -b 4096 -I 256 \
+    -O ^has_journal,^resize_inode -m 0 -d "$VDLKM_ROOT" \
+    "$VENDOR_DLKM_IMG" "${VENDOR_DLKM_SIZE:-64M}"
+e2fsck -fn "$VENDOR_DLKM_IMG" >/dev/null
+printf 'vendor_dlkm: %s module(s), image %s bytes\n' \
+    "$VENDOR_DLKM_MODULES" "$(stat -c %s "$VENDOR_DLKM_IMG")"
+
+printf '%s\n' '[5/5] packaging recovery upgrade zip'
 if [[ ! -f "$ANYKERNEL_DIR/anykernel.sh" ]]; then
     printf 'error: AnyKernel3 template not found: %s\n' "$ANYKERNEL_DIR" >&2
     exit 1
@@ -312,6 +372,7 @@ rm -rf "$AK_STAGE/.git" "$AK_STAGE/.github"
 cp -f "$STAGE/Image" "$AK_STAGE/Image"
 mkdir -p "$DEST_DIR"
 cp -f "$STAGE/socko.img" "$AK_STAGE/socko.img"
+cp -f "$STAGE/vendor_dlkm.img" "$AK_STAGE/vendor_dlkm.img"
 cp -f "$RECOVERY_SCRIPT_TEMPLATE" "$AK_STAGE/anykernel.sh"
 
 export AK_KERNEL_RELEASE="$KERNEL_RELEASE"
@@ -338,6 +399,7 @@ kernel_author=$KERNEL_AUTHOR
 build_time=$BUILD_TIME
 git_hash=$GIT_HASH
 socko_target=/dev/block/by-name/socko
+vendor_dlkm_target=/dev/block/mapper/vendor_dlkm
 EOF
 
 RECOVERY_OUTPUT="$DEST_DIR/P21H180-recovery${PROFILE_SUFFIX}-$KERNEL_RELEASE.zip"
@@ -365,13 +427,15 @@ rm -rf "$DEST_DIR/modules" "$DEST_DIR/socko-modules"
     printf 'socko_factory_modules=%s\n' "${#FACTORY_MODULES[@]}"
     printf 'socko_template=%s\n' "$SOCKO_TEMPLATE"
     printf 'socko_target=/dev/block/by-name/socko\n'
+    printf 'vendor_dlkm_modules=%s\n' "$VENDOR_DLKM_MODULES"
+    printf 'vendor_dlkm_target=%s\n' '/dev/block/mapper/vendor_dlkm'
     printf 'recovery_output=%s\n' "$RECOVERY_OUTPUT"
     sha256sum "$STAGE/Image"
     sha256sum "$STAGE/socko.img"
     sha256sum "$RECOVERY_OUTPUT"
 } > "$STAGE/build-info.txt"
 
-printf '%s\n' '[4/4] recovery artifact'
+printf '%s\n' '[5/5] recovery artifact'
 stat -c '%n %s bytes' "$RECOVERY_OUTPUT"
 sha256sum "$RECOVERY_OUTPUT"
 printf 'output: %s\n' "$DEST_DIR"

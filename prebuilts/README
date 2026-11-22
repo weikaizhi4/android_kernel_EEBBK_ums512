@@ -1,0 +1,15 @@
+Shared kernel build inputs.
+
+socko.factory.img
+-----------------
+The stock socko filesystem, used as the template for every device.  The
+recovery build replaces the selected kernel modules inside it after
+rewriting their symbol CRCs and vermagic for the kernel being built.
+
+socko is the pre-vendor_dlkm module location: a flat ext4 filesystem with
+the .ko files at its root, one image for the whole UMS512 family.  The
+recovery package always flashes it.
+
+src/dhd
+-------
+Not used by any of the p2*h1*0 profiles.
