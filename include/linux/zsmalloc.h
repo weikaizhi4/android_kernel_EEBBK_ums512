@@ -52,6 +52,7 @@ size_t zs_huge_class_size(struct zs_pool *pool);
 void *zs_map_object(struct zs_pool *pool, unsigned long handle,
 			enum zs_mapmode mm);
 void zs_unmap_object(struct zs_pool *pool, unsigned long handle);
+int zs_lookup_class_index(struct zs_pool *pool, unsigned int size);
 
 unsigned long zs_get_total_pages(struct zs_pool *pool);
 unsigned long zs_compact(struct zs_pool *pool);
