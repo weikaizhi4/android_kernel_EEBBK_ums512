@@ -110,7 +110,7 @@ export PATH="$TC_DIR:$PATH"
 # Keep the release string stable so the kernel and factory modules use the
 # exact same vermagic across reproducible builds.
 # Cosmetic only: the effective version comes from CONFIG_LOCALVERSION in the
-# defconfig (currently -Slimezhao-v1.5); read it so logs match the build.
+# defconfig; read it so logs match the build.
 KERNEL_LOCALVERSION="${KERNEL_LOCALVERSION:-$(sed -n 's/^CONFIG_LOCALVERSION="\(.*\)"/\1/p' \
     "$SRC_DIR/arch/arm64/configs/$DEFCONFIG" | head -1)}"
 KBUILD_BUILD_USER="${KBUILD_BUILD_USER:-twodays}"

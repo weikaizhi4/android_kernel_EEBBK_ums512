@@ -10,6 +10,7 @@ on:
         default: p22h190
         options:
           - p22h190
+          - p21h180
           - p21h170
       profile:
         description: Build profile
@@ -118,6 +119,19 @@ jobs:
                   ;;
               esac
               ;;
+            p21h180)
+              if [ "$BUILD_PROFILE" != standard ]; then
+                echo "the droidspaces profile is only implemented for p22h190" >&2
+                exit 2
+              fi
+              KERNEL_PREFIX=P21H180
+              BUILD_SCRIPT=./scripts/build-p21h180.sh
+              SOCKO="$GITHUB_WORKSPACE/prebuilts/p21h180/socko.factory.img"
+              profile=p21h180
+              defconfig=ums512-p21h180_defconfig
+              build_dir="$GITHUB_WORKSPACE/out/ums512-p21h180"
+              release_dir="$GITHUB_WORKSPACE/out/release"
+              ;;
             p21h170)
               if [ "$BUILD_PROFILE" != standard ]; then
                 echo "the droidspaces profile is only implemented for p22h190" >&2
@@ -136,6 +150,14 @@ jobs:
               exit 2
               ;;
           esac
+          if [ ! -f "$SOCKO" ]; then
+            echo "error: missing $SOCKO" >&2
+            echo "       the recovery package patches the factory socko partition image;" >&2
+            echo "       dump it from a stock $BUILD_DEVICE and commit it before running this job" >&2
+            echo "       (the kernel-only target does not need it: $BUILD_SCRIPT kernel)" >&2
+            exit 2
+          fi
+
           {
             printf 'KERNEL_PREFIX=%s\n' "$KERNEL_PREFIX"
             printf 'BUILD_SCRIPT=%s\n' "$BUILD_SCRIPT"

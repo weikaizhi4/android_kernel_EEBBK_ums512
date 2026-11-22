@@ -1,8 +1,8 @@
-### EEBBK P22H190 recovery kernel installer
+### EEBBK P21H170 recovery kernel installer
 ### Boot-image handling is provided by the bundled AnyKernel3 tools.
 
 properties() { '
-kernel.string=EEBBK P22H190 @KERNEL_RELEASE@
+kernel.string=EEBBK P21H170 @KERNEL_RELEASE@
 do.devicecheck=0
 do.modules=0
 do.systemless=0
@@ -28,7 +28,7 @@ NO_MAGISK_CHECK=1;
 . tools/ak3-core.sh;
 
 ui_print " ";
-ui_print "Device: EEBBK P22H190";
+ui_print "Device: EEBBK P21H170";
 ui_print "Author: @KERNEL_AUTHOR@";
 ui_print "Version: @KERNEL_RELEASE@";
 ui_print "Build time: @BUILD_TIME@";
